@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Location & Route Finder</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(to right, #4e54c8, #8f94fb);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .container {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    #map {
+      flex: 2;
+      height: 100%;
+      z-index: 1;
+    }
+
+    .sidebar {
+      flex: 1;
+      background: #fff;
+      padding: 30px 20px;
+      box-shadow: -4px 0 15px rgba(0, 0, 0, 0.2);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .sidebar h2 {
+      text-align: center;
+      color: #4e54c8;
+      font-size: 28px;
+      margin-bottom: 30px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 30px;
+    }
+
+    .form-group label {
+      font-weight: bold;
+      color: #444;
+    }
+
+    .form-group input {
+      padding: 12px;
+      font-size: 16px;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      outline: none;
+      transition: border 0.3s;
+    }
+
+    .form-group input:focus {
+      border-color: #4e54c8;
+    }
+
+    .form-group button {
+      padding: 12px;
+      font-size: 16px;
+      background: #4e54c8;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .form-group button:hover {
+      background: #3b40a4;
+      transform: scale(1.02);
+    }
+
+    .footer {
+      text-align: center;
+      color: #aaa;
+      font-size: 12px;
+      margin-top: auto;
+    }
+
+    @media (max-width: 768px) {
+      .container { flex-direction: column; }
+      #map { height: 50vh; }
+      .sidebar { height: 50vh; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Map Section -->
+  <div id="map"></div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div>
+      <h2>🚗 Route Planner</h2>
+
+      <div class="form-group">
+        <button onclick="getUserLocation()">📍 Get My Current Location</button>
+        <button onclick="startLiveTracking()">📡 Live Track Me</button>
+      </div>
+
+      <div class="form-group">
+        <label for="destination">Destination:</label>
+        <input type="text" id="destination" placeholder="e.g., Jaipur, Delhi">
+        <button onclick="showDestination()">📍 Show Destination</button>
+        <button onclick="showRoute()">🛣️ Show Route</button>
+      </div>
+
+      <div class="form-group">
+        <label for="placeType">Find Nearby Places (e.g., gym, school):</label>
+        <input type="text" id="placeType" placeholder="Enter place type">
+        <button onclick="findNearbyPlaces()">🔍 Find Nearby</button>
+      </div>
+    </div>
+
+    <div class="footer">© 2025 SmartMap Tracker | Made with ❤️</div>
+  </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
+<script>
+  let map;
+  let userMarker;
+  let destMarker;
+  let routingControl;
+  let userCoords;
+  let watchId;
+  let nearbyMarkers = [];
+
+  function initMap(lat, lng) {
+    if (!map) {
+      map = L.map('map').setView([lat, lng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+    }
+
+    if (userMarker) map.removeLayer(userMarker);
+
+    userMarker = L.marker([lat, lng]).addTo(map).bindPopup("Your Location").openPopup();
+    userCoords = [lat, lng];
+    map.setView([lat, lng], 13);
+  }
+
+  function getUserLocation() {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        position => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          initMap(lat, lng);
+        },
+        () => alert("Error fetching location.")
+      );
+    } else {
+      alert("Geolocation is not supported by this browser.");
+    }
+  }
+
+  function startLiveTracking() {
+    if (!navigator.geolocation) return alert("Not supported.");
+    watchId = navigator.geolocation.watchPosition(
+      pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+
+        if (!map) initMap(lat, lng);
+        if (userMarker) {
+          userMarker.setLatLng([lat, lng]).bindPopup("Your Live Location").openPopup();
+        } else {
+          userMarker = L.marker([lat, lng]).addTo(map).bindPopup("Your Live Location").openPopup();
+        }
+        userCoords = [lat, lng];
+        map.setView([lat, lng]);
+      },
+      () => alert("Tracking error."),
+      { enableHighAccuracy: true }
+    );
+  }
+
+  function showDestination() {
+    const place = document.getElementById('destination').value;
+    if (!place) return alert("Enter destination.");
+
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${place}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.length === 0) return alert("Not found.");
+        const lat = data[0].lat;
+        const lon = data[0].lon;
+
+        if (destMarker) map.removeLayer(destMarker);
+        destMarker = L.marker([lat, lon]).addTo(map).bindPopup("Destination: " + place).openPopup();
+        map.setView([lat, lon], 13);
+      });
+  }
+
+  function showRoute() {
+    if (!userCoords || !destMarker) return alert("Both points required.");
+    const destLatLng = destMarker.getLatLng();
+    if (routingControl) map.removeControl(routingControl);
+    routingControl = L.Routing.control({
+      waypoints: [
+        L.latLng(userCoords[0], userCoords[1]),
+        L.latLng(destLatLng.lat, destLatLng.lng)
+      ],
+      routeWhileDragging: false
+    }).addTo(map);
+  }
+
+  function findNearbyPlaces() {
+  const type = document.getElementById('placeType').value;
+  if (!type || !userCoords) return alert("Enter type and ensure location is set.");
+
+  // Clear old markers
+  nearbyMarkers.forEach(m => map.removeLayer(m));
+  nearbyMarkers = [];
+
+  const [lat, lon] = userCoords;
+  const overpassUrl = `
+    https://overpass-api.de/api/interpreter?data=
+    [out:json];
+    (
+      node(around:1000,${lat},${lon})[name~"${type}",i];
+      way(around:1000,${lat},${lon})[name~"${type}",i];
+      relation(around:1000,${lat},${lon})[name~"${type}",i];
+    );
+    out center;`;
+
+  fetch(overpassUrl.trim())
+    .then(res => res.json())
+    .then(data => {
+      if (!data.elements.length) return alert("No places found nearby.");
+      data.elements.forEach(el => {
+        const lat = el.lat || el.center?.lat;
+        const lon = el.lon || el.center?.lon;
+        const name = el.tags.name || type;
+
+        if (lat && lon) {
+          const marker = L.marker([lat, lon]).addTo(map)
+            .bindPopup(`📍 ${name}`);
+          nearbyMarkers.push(marker);
+        }
+      });
+      alert(`${nearbyMarkers.length} places found.`);
+    })
+    .catch(() => alert("Error fetching nearby places."));
+}
+
+</script>
+
+</body>
+</html>

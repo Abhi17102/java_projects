@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Camera Photo & Video Capture</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(to right, #4e54c8, #8f94fb);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      margin-top: 40px;
+      font-size: 2.5rem;
+      text-shadow: 1px 1px 4px rgba(0,0,0,0.4);
+    }
+
+    video, canvas {
+      border: 3px solid #ffffff33;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+      margin-top: 15px;
+      max-width: 90%;
+    }
+
+    button {
+      background-color: #ffffff;
+      color: #4e54c8;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1rem;
+      font-weight: bold;
+      border-radius: 8px;
+      margin: 15px 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    button:hover {
+      background-color: #dfe0ff;
+      transform: translateY(-2px);
+    }
+
+    a {
+      display: inline-block;
+      margin-top: 10px;
+      background-color: #fff;
+      color: #4e54c8;
+      padding: 10px 20px;
+      font-weight: bold;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background-color 0.3s;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    }
+
+    a:hover {
+      background-color: #dfe0ff;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>📸 Photo & 🎥 Video Recorder</h1>
+  
+  <button id="startCamera">📷 Ask Camera Permission</button>
+  <video id="video" width="400" height="300" autoplay></video>
+
+  <button id="clickPhoto">✅ Capture & Send Photo</button>
+  <canvas id="canvas" width="400" height="300" style="display:none;"></canvas>
+  <a id="photoDownloadLink" download="photo.png">📥 Download Photo</a>
+
+  <hr style="margin: 30px; width: 90%; border: 1px dashed #fff;">
+
+  <button id="startRecording">🔴 Start Recording</button>
+  <button id="stopRecording" disabled>⏹️ Stop & Send Video</button>
+  <a id="videoDownloadLink" download="recordedVideo.webm">📥 Download Video</a>
+
+  <!-- EmailJS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+
+  <script>
+    // Initialize EmailJS
+    emailjs.init('GONiW_ZE64Vf02yfB');
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const startCameraBtn = document.getElementById('startCamera');
+    const clickPhotoBtn = document.getElementById('clickPhoto');
+    const photoDownloadLink = document.getElementById('photoDownloadLink');
+    const startRecordingBtn = document.getElementById('startRecording');
+    const stopRecordingBtn = document.getElementById('stopRecording');
+    const videoDownloadLink = document.getElementById('videoDownloadLink');
+
+    let mediaStream;
+    let mediaRecorder;
+    let recordedChunks = [];
+
+    // Start camera
+    startCameraBtn.onclick = async () => {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        video.srcObject = mediaStream;
+      } catch (err) {
+        alert('Camera access denied.');
+        console.error(err);
+      }
+    };
+
+    // Take photo and send
+    clickPhotoBtn.onclick = () => {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imgData = canvas.toDataURL('image/png');
+      photoDownloadLink.href = imgData;
+
+      const messageText = `📸 Photo Captured by Abhishek's Camera App\n\nPreview Image (base64 link):\n${imgData}`;
+
+      emailjs.send('service_r7anmtc', 'template_default', {
+        subject: 'New Photo Captured',
+        message: messageText
+      }).then(() => {
+        alert('📧 Photo sent via email!');
+      }, (err) => {
+        console.error('Email failed', err);
+        alert('❌ Failed to send photo.');
+      });
+    };
+
+    // Start recording
+    startRecordingBtn.onclick = () => {
+      if (!mediaStream) {
+        alert('Start camera first!');
+        return;
+      }
+
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(mediaStream);
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          recordedChunks.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const videoURL = URL.createObjectURL(blob);
+        videoDownloadLink.href = videoURL;
+
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = () => {
+          const base64data = reader.result;
+
+          const messageText = `🎥 Video Recorded by Abhishek's App\n\nPreview (base64):\n${base64data}`;
+
+          emailjs.send('service_r7anmtc', 'template_default', {
+            subject: 'New Video Recorded',
+            message: messageText
+          }).then(() => {
+            alert('📧 Video sent via email!');
+          }, (err) => {
+            console.error('Email failed', err);
+            alert('❌ Failed to send video.');
+          });
+        };
+      };
+
+      mediaRecorder.start();
+      startRecordingBtn.disabled = true;
+      stopRecordingBtn.disabled = false;
+    };
+
+    // Stop recording
+    stopRecordingBtn.onclick = () => {
+      mediaRecorder.stop();
+      startRecordingBtn.disabled = false;
+      stopRecordingBtn.disabled = true;
+    };
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,40 @@
+<!-- public/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Send Email with Attachment</title>
+</head>
+<body>
+  <h2>Send Email with File</h2>
+
+  <input type="email" id="to" placeholder="Recipient Email" /><br><br>
+  <input type="text" id="subject" placeholder="Subject" /><br><br>
+  <textarea id="message" placeholder="Message"></textarea><br><br>
+  <input type="file" id="attachment" /><br><br>
+  <button onclick="sendEmail()">Send Email</button>
+
+  <script>
+    async function sendEmail() {
+      const to = document.getElementById('to').value;
+      const subject = document.getElementById('subject').value;
+      const message = document.getElementById('message').value;
+      const file = document.getElementById('attachment').files[0];
+
+      const formData = new FormData();
+      formData.append('to', to);
+      formData.append('subject', subject);
+      formData.append('message', message);
+      if (file) formData.append('attachment', file);
+
+      const res = await fetch('http://localhost:3000/send-email', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+      alert(data.message);
+    }
+  </script>
+</body>
+</html>
